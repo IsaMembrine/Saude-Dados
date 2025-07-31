@@ -1,4 +1,3 @@
-
 # update_data.py
 import os
 import io
@@ -77,7 +76,6 @@ def processar_arquivos(downloaded_files):
     all_dataframes = {}
     hoje = datetime.now()
     limite_data = hoje.replace(day=1)
-    three_months_ago = limite_data - timedelta(days=90)
 
     for node_id, files in downloaded_files.items():
         dfs_node = []
