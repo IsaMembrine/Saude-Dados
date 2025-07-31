@@ -17,7 +17,6 @@ auth = (
 base_url = 'https://loadsensing.wocs3.com'
 urls = [f'{base_url}/27920/dataserver/node/view/{nid}' for nid in [1006, 1007, 1008, 1010, 1011, 1012]]
 
-# Etapa 1: coletar links dos arquivos
 def coletar_links():
     all_file_links = {}
     for url in urls:
@@ -32,7 +31,6 @@ def coletar_links():
             print(f"Erro em {url}: {e}")
     return all_file_links
 
-# Etapa 2: baixar arquivos dos últimos 3 meses
 def baixar_arquivos(all_file_links):
     hoje = datetime.now()
     limite_data = hoje.replace(day=1)
@@ -71,11 +69,11 @@ def baixar_arquivos(all_file_links):
                 downloaded_files[node_id].append(filepath)
     return downloaded_files
 
-# Etapa 3: processar CSVs e ZIPs
 def processar_arquivos(downloaded_files):
     all_dataframes = {}
     hoje = datetime.now()
     limite_data = hoje.replace(day=1)
+    three_months_ago = limite_data - timedelta(days=90)
 
     for node_id, files in downloaded_files.items():
         dfs_node = []
@@ -105,7 +103,6 @@ def processar_arquivos(downloaded_files):
             all_dataframes[node_id] = df_concat
     return all_dataframes
 
-# Etapa 4: análises e geração de arquivos
 def analisar_e_salvar(all_dataframes):
     first_node = list(all_dataframes.keys())[0]
     todos_nos = all_dataframes[first_node].copy()
@@ -124,11 +121,15 @@ def analisar_e_salvar(all_dataframes):
     p_cols = [c for c in df_cleaned.columns if c.startswith('p-')]
     df_selected = df_cleaned[['Date-and-time', 'Time_Rounded'] + p_cols].copy()
 
-    df_selected['Date'] = pd.to_datetime(df_selected['Date-and-time']).dt.date
-    df_selected['Time_Rounded'] = pd.to_datetime(df_selected['Date-and-time']).dt.round('h').dt.time
-    melted = df_selected.melt(id_vars=['Date', 'Time_Rounded'], value_vars=p_cols, var_name='Node_p_Column', value_name='Value')
+    # 🔁 Usando Date-and-time corretamente como datetime64
+    melted = df_selected.melt(
+        id_vars=['Date-and-time', 'Time_Rounded'],
+        value_vars=p_cols,
+        var_name='Node_p_Column',
+        value_name='Value'
+    )
     melted.dropna(subset=['Value'], inplace=True)
-    melted['Month'] = pd.to_datetime(melted['Date']).dt.to_period('M')   
+    melted['Month'] = melted['Date-and-time'].dt.to_period('M')
     melted['Node_ID'] = melted['Node_p_Column'].apply(lambda x: x.split('-')[1])
     counts = melted.groupby(['Month', 'Node_ID']).size().reset_index(name='Monthly_Data_Count')
     counts['Days_in_Month'] = counts['Month'].dt.days_in_month
@@ -144,27 +145,4 @@ def analisar_e_salvar(all_dataframes):
         f_col = f'freqInHz-{nid}-VW-Ch1'
         p_col = f'p-{nid}-Ch1'
         if f_col in todos_nos.columns and p_col in todos_nos.columns:
-            node_column_pairs[nid] = (f_col, p_col)
-
-    todos_nos['Month'] = todos_nos['Date-and-time'].dt.to_period('M')
-    corr_results = []
-    for nid, (f_col, p_col) in node_column_pairs.items():
-        temp = todos_nos[['Month', f_col, p_col]].dropna()
-        if not temp.empty:
-            grp = temp.groupby('Month')[[f_col, p_col]].corr().unstack().iloc[:, 1]
-            df_corr_node = grp.reset_index()
-            df_corr_node.columns = ['Month', 'Correlation']
-            df_corr_node['Node_ID'] = nid
-            corr_results.append(df_corr_node)
-
-    if corr_results:
-        df_corr = pd.concat(corr_results, ignore_index=True)
-        df_corr['Month'] = df_corr['Month'].astype(str)
-        df_corr.to_csv("df_corr.csv", index=False)
-
-# Executa tudo
-if __name__ == "__main__":
-    links = coletar_links()
-    arquivos = baixar_arquivos(links)
-    dfs = processar_arquivos(arquivos)
-    analisar_e_salvar(dfs)
+            node_column_pairs
