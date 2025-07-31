@@ -8,7 +8,6 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-# Autenticação via variáveis de ambiente
 auth = (
     os.getenv("GATEWAY_USERNAME"),
     os.getenv("GATEWAY_PASSWORD")
@@ -71,10 +70,6 @@ def baixar_arquivos(all_file_links):
 
 def processar_arquivos(downloaded_files):
     all_dataframes = {}
-    hoje = datetime.now()
-    limite_data = hoje.replace(day=1)
-    three_months_ago = limite_data - timedelta(days=90)
-
     for node_id, files in downloaded_files.items():
         dfs_node = []
         for fp in files:
@@ -112,16 +107,14 @@ def analisar_e_salvar(all_dataframes):
 
     todos_nos['Date-and-time'] = pd.to_datetime(todos_nos['Date-and-time'], errors='coerce')
     todos_nos.dropna(subset=['Date-and-time'], inplace=True)
-    todos_nos['Date'] = todos_nos['Date-and-time'].dt.date
     todos_nos['Time_Rounded'] = todos_nos['Date-and-time'].dt.round('h').dt.time
 
     df_cleaned = todos_nos.copy()
-    df_cleaned.drop_duplicates(subset=['Date', 'Time_Rounded'], inplace=True)
+    df_cleaned.drop_duplicates(subset=['Date-and-time', 'Time_Rounded'], inplace=True)
 
     p_cols = [c for c in df_cleaned.columns if c.startswith('p-')]
     df_selected = df_cleaned[['Date-and-time', 'Time_Rounded'] + p_cols].copy()
 
-    # 🔁 Usando Date-and-time corretamente como datetime64
     melted = df_selected.melt(
         id_vars=['Date-and-time', 'Time_Rounded'],
         value_vars=p_cols,
@@ -129,12 +122,16 @@ def analisar_e_salvar(all_dataframes):
         value_name='Value'
     )
     melted.dropna(subset=['Value'], inplace=True)
+
+    # 🔧 CORREÇÃO AQUI: usando Date-and-time como datetime compatível
     melted['Month'] = melted['Date-and-time'].dt.to_period('M')
+
     melted['Node_ID'] = melted['Node_p_Column'].apply(lambda x: x.split('-')[1])
     counts = melted.groupby(['Month', 'Node_ID']).size().reset_index(name='Monthly_Data_Count')
     counts['Days_in_Month'] = counts['Month'].dt.days_in_month
     counts['Max_Data'] = counts['Days_in_Month'] * 24
     counts['Monthly_Attendance_Percentage'] = (counts['Monthly_Data_Count'] / counts['Max_Data']) * 100
+
     monthy_selecionado = counts[['Month', 'Node_ID', 'Monthly_Attendance_Percentage']].copy()
     monthy_selecionado['Month'] = monthy_selecionado['Month'].astype(str)
     monthy_selecionado.to_csv("monthy_selecionado.csv", index=False)
@@ -145,4 +142,26 @@ def analisar_e_salvar(all_dataframes):
         f_col = f'freqInHz-{nid}-VW-Ch1'
         p_col = f'p-{nid}-Ch1'
         if f_col in todos_nos.columns and p_col in todos_nos.columns:
-            node_column_pairs
+            node_column_pairs[nid] = (f_col, p_col)
+
+    todos_nos['Month'] = todos_nos['Date-and-time'].dt.to_period('M')
+    corr_results = []
+    for nid, (f_col, p_col) in node_column_pairs.items():
+        temp = todos_nos[['Month', f_col, p_col]].dropna()
+        if not temp.empty:
+            grp = temp.groupby('Month')[[f_col, p_col]].corr().unstack().iloc[:, 1]
+            df_corr_node = grp.reset_index()
+            df_corr_node.columns = ['Month', 'Correlation']
+            df_corr_node['Node_ID'] = nid
+            corr_results.append(df_corr_node)
+
+    if corr_results:
+        df_corr = pd.concat(corr_results, ignore_index=True)
+        df_corr['Month'] = df_corr['Month'].astype(str)
+        df_corr.to_csv("df_corr.csv", index=False)
+
+if __name__ == "__main__":
+    links = coletar_links()
+    arquivos = baixar_arquivos(links)
+    dfs = processar_arquivos(arquivos)
+    analisar_e_salvar(dfs)
