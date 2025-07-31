@@ -8,11 +8,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-auth = (
-    os.getenv("GATEWAY_USERNAME"),
-    os.getenv("GATEWAY_PASSWORD")
-)
-
+auth = (os.getenv("GATEWAY_USERNAME"), os.getenv("GATEWAY_PASSWORD"))
 base_url = 'https://loadsensing.wocs3.com'
 urls = [f'{base_url}/27920/dataserver/node/view/{nid}' for nid in [1006, 1007, 1008, 1010, 1011, 1012]]
 
@@ -107,31 +103,31 @@ def analisar_e_salvar(all_dataframes):
 
     todos_nos['Date-and-time'] = pd.to_datetime(todos_nos['Date-and-time'], errors='coerce')
     todos_nos.dropna(subset=['Date-and-time'], inplace=True)
+    todos_nos['Date'] = todos_nos['Date-and-time'].dt.date
     todos_nos['Time_Rounded'] = todos_nos['Date-and-time'].dt.round('h').dt.time
 
     df_cleaned = todos_nos.copy()
-    df_cleaned.drop_duplicates(subset=['Date-and-time', 'Time_Rounded'], inplace=True)
+    df_cleaned.drop_duplicates(subset=['Date', 'Time_Rounded'], inplace=True)
 
     p_cols = [c for c in df_cleaned.columns if c.startswith('p-')]
-    df_selected = df_cleaned[['Date-and-time', 'Time_Rounded'] + p_cols].copy()
+    df_selected = df_cleaned[['Date-and-time', 'Date', 'Time_Rounded'] + p_cols].copy()
 
     melted = df_selected.melt(
-        id_vars=['Date-and-time', 'Time_Rounded'],
+        id_vars=['Date-and-time', 'Date', 'Time_Rounded'],
         value_vars=p_cols,
         var_name='Node_p_Column',
         value_name='Value'
     )
     melted.dropna(subset=['Value'], inplace=True)
 
-    # 🔧 Correção: usar coluna Date-and-time compatível com .dt
-    melted['Month'] = melted['Date-and-time'].dt.to_period('M')
+    # ✅ Correção da conversão para período mensal:
+    melted['Month'] = pd.to_datetime(melted['Date'], errors='coerce').dt.to_period('M')
 
     melted['Node_ID'] = melted['Node_p_Column'].apply(lambda x: x.split('-')[1])
     counts = melted.groupby(['Month', 'Node_ID']).size().reset_index(name='Monthly_Data_Count')
     counts['Days_in_Month'] = counts['Month'].dt.days_in_month
     counts['Max_Data'] = counts['Days_in_Month'] * 24
     counts['Monthly_Attendance_Percentage'] = (counts['Monthly_Data_Count'] / counts['Max_Data']) * 100
-
     monthy_selecionado = counts[['Month', 'Node_ID', 'Monthly_Attendance_Percentage']].copy()
     monthy_selecionado['Month'] = monthy_selecionado['Month'].astype(str)
     monthy_selecionado.to_csv("monthy_selecionado.csv", index=False)
