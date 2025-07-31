@@ -26,4 +26,4 @@ jobs:
           pip install requests pandas beautifulsoup4
 
       - name: Executar script de atualização
-        run: python update_data.py
+        run: python update2_data.py
