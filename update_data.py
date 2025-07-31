@@ -123,7 +123,7 @@ def analisar_e_salvar(all_dataframes):
     )
     melted.dropna(subset=['Value'], inplace=True)
 
-    # 🔧 CORREÇÃO AQUI: usando Date-and-time como datetime compatível
+    # 🔧 Correção: usar coluna Date-and-time compatível com .dt
     melted['Month'] = melted['Date-and-time'].dt.to_period('M')
 
     melted['Node_ID'] = melted['Node_p_Column'].apply(lambda x: x.split('-')[1])
@@ -165,3 +165,4 @@ if __name__ == "__main__":
     arquivos = baixar_arquivos(links)
     dfs = processar_arquivos(arquivos)
     analisar_e_salvar(dfs)
+
