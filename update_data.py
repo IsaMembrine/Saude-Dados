@@ -128,7 +128,7 @@ def analisar_e_salvar(all_dataframes):
     df_selected['Time_Rounded'] = pd.to_datetime(df_selected['Date-and-time']).dt.round('h').dt.time
     melted = df_selected.melt(id_vars=['Date', 'Time_Rounded'], value_vars=p_cols, var_name='Node_p_Column', value_name='Value')
     melted.dropna(subset=['Value'], inplace=True)
-    melted['Month'] = pd.to_datetime(melted['Date']).dt.to_period('M')    
+    melted['Month'] = pd.to_datetime(melted['Date']).dt.to_period('M')   
     melted['Node_ID'] = melted['Node_p_Column'].apply(lambda x: x.split('-')[1])
     counts = melted.groupby(['Month', 'Node_ID']).size().reset_index(name='Monthly_Data_Count')
     counts['Days_in_Month'] = counts['Month'].dt.days_in_month
